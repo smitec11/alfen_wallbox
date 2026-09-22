@@ -139,6 +139,26 @@ async def test_failed_login_counts_towards_rate_limit(alfen_device: AlfenDevice,
     assert alfen_device._check_login_rate_limit() is False
 
 
+async def test_refused_login_explains_single_session(
+    alfen_device: AlfenDevice, mock_session, caplog
+):
+    """Test that a refused login points at the single session limit.
+
+    The wallbox answers 401 or 403 when another client is logged in, which users
+    report as "403 forbidden" without knowing what to do about it.
+    """
+    error = RuntimeError("Forbidden")
+    error.status = 403  # type: ignore[attr-defined]
+    mock_session.post = MagicMock(side_effect=error)
+
+    with caplog.at_level("ERROR"):
+        await alfen_device.login()
+
+    assert "refused the login with HTTP 403" in caplog.text
+    assert "only one session at a time" in caplog.text
+    assert len(alfen_device._login_attempts) == 1
+
+
 async def test_logout(alfen_device: AlfenDevice):
     """Test logout operation."""
     with patch.object(alfen_device, "_post", new=AsyncMock(return_value={"success": True})):

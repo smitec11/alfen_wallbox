@@ -945,11 +945,22 @@ class AlfenDevice:
                         "[%s] Stored JWT access token from login response", self.log_id
                     )
         except Exception as e:  # pylint: disable=broad-except
-            _LOGGER.error(
-                "[%s] Unexpected error on LOGIN: %s",
-                self.log_id,
-                self._sanitize_exception(e),
-            )
+            if (status := getattr(e, "status", None)) in (401, 403):
+                # The wallbox only allows one session at a time, so a refused login
+                # almost always means that another client is connected.
+                _LOGGER.error(
+                    "[%s] Wallbox refused the login with HTTP %s. It allows only one "
+                    "session at a time, so log out from the Alfen app, the ACE installer "
+                    "or another Home Assistant before this integration can log in",
+                    self.log_id,
+                    status,
+                )
+            else:
+                _LOGGER.error(
+                    "[%s] Unexpected error on LOGIN: %s",
+                    self.log_id,
+                    self._sanitize_exception(e),
+                )
             # Only failed logins count towards the rate limit: logging in again
             # after the wallbox closed the connection is normal behaviour.
             self._record_login_attempt()
